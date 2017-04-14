@@ -6,113 +6,134 @@ import (
 	"time"
 )
 
-type Pump struct {
-	Name  string
-	Fills int
+type Worker interface {
+	DoWork() bool
+	Init(string)
+	GetName() string
+	Report()
 }
 
 type Car struct {
-	Name  string
-	Fills int
+	Name     string        /* name of car. */
+	FillTime time.Duration /* amount of time it takes to fill tank. */
+	Fills    int           /* number of times a car has been filled. */
 }
 
-func PumpProducer(npumps int, newpumps <-chan Pump) <-chan Pump {
-	rc := make(chan Pump)
-	go func() {
-		for i := 0; i < npumps; i++ {
-			pump := Pump{Name: fmt.Sprintf("Pump #%d", i)}
-			rc <- pump
-		}
-		for {
-			select {
-			case nextpump := <-newpumps:
-				log.Printf("%s is available!", nextpump.Name)
-				rc <- nextpump
-			}
-		}
-	}()
-
-	return rc
+type Pump struct {
+	Name  string /* name of pump. */
+	Pumps int    /* number of times it has filled a tank. */
 }
 
-func CarProducer(ncars int, newcars <-chan Car) <-chan Car {
-	rc := make(chan Car)
-	go func() {
-		for i := 0; i < ncars; i++ {
-			car := Car{Name: fmt.Sprintf("Car #%d", i)}
-			rc <- car
-		}
-		for {
-			select {
-			case nextcar := <-newcars:
-				log.Printf("%s has driven to back of the queue.\n", nextcar.Name)
-				rc <- nextcar
-			}
-		}
-	}()
+func (pump Pump) GetName() string {
+	return pump.Name
+}
 
-	return rc
+func (pump *Pump) DoWork() bool {
+	/*
+	 * pumpq really don't do anything.  we just need to have an available pump at
+	 * the same time we have a car.
+	 */
+	pump.Pumps++
+	log.Printf("START PUMPING: %s", pump.Name)
+	return true
+}
+
+func (pump Pump) Report() {
+	fmt.Printf("%s pumped %d times.\n", pump.Name, pump.Pumps)
+}
+
+func (pump *Pump) Init(name string) {
+	pump.Name = name
+}
+
+func (car *Car) DoWork() bool {
+	log.Printf("START FILLING: %s", car.Name)
+	time.Sleep(car.FillTime * time.Millisecond)
+	log.Printf("END FILLING: %s", car.Name)
+	log.Printf("%s leaving pump.", car.Name)
+	car.Fills++
+	return true
+}
+
+func (car Car) Report() {
+	fmt.Printf("%s filled %d times.\n", car.Name, car.Fills)
+}
+
+func (car Car) GetName() string {
+	return car.Name
+
+}
+
+func (car *Car) Init(name string) {
+	car.Name = name
 }
 
 func main() {
-	var newpump = make(chan Pump, 10)
-	var newcar = make(chan Car, 4)
+	npumps := 4
+	ncars := 10
+	runtime := time.Duration(29)
+	/* In both loops below, we have to pass pointers to our concrete types (Pump
+	 * and Car).
+	 *
+	 *  https://golang.org/ref/spec#Method_sets
+	 */
 
-	pumpchan := PumpProducer(4, newpump)
-	carchan := CarProducer(10, newcar)
+	/* Make a pump channel and prime it with new pumps. */
+	pumpq := make(chan Worker, npumps)
+	for i := 0; i < npumps; i++ {
+		pumpq <- &Pump{Name: fmt.Sprintf("Pump #%d", i)}
+	}
+
+	/* Make a car channel and prime it with new cars. */
+	carq := make(chan Worker, ncars)
+	for i := 0; i < ncars; i++ {
+		carq <- &Car{Name: fmt.Sprintf("Vehicle #%d", i), FillTime: 50}
+	}
 
 	start := time.Now()
 	for {
-
-		pump := <-pumpchan
-		car := <-carchan
+		/* block until both a pump and a car is ready. */
+		pump := <-pumpq
+		car := <-carq
 
 		go func() {
-			log.Printf("Pumping gas into %s (%d) at pump %s (%d).\n",
-				car.Name, car.Fills, pump.Name, pump.Fills)
+			log.Printf("About to fill %s from %s", car.GetName(), pump.GetName())
+			pump.DoWork()
+			car.DoWork() /* this will time.Sleep(). */
 
-			time.Sleep(50 * time.Millisecond)
-
-			/* Increment our fill counters. */
-			pump.Fills++
-			car.Fills++
-
-			/* put pumps and cars back into the queue. */
-			newpump <- pump
-			newcar <- car
+			/* put pump and car back into the queue. */
+			pumpq <- pump
+			carq <- car
 		}()
 
-		if int64(time.Since(start)/time.Second) > 10 {
+		if time.Since(start)/time.Second > runtime {
 			log.Printf("Running for %s\n", time.Since(start))
 			break
 		}
 	}
 
-	fmt.Printf("Generating report:")
+	/* Wait for all remaining goroutines to finish. */
+	time.Sleep(500 * time.Millisecond)
 
-PL:
+	/* Read all pumps from pumpq chanel and report usage. */
+pr:
 	for {
 		select {
-		case pump := <-pumpchan:
-			fmt.Printf("%s - %d\n", pump.Name, pump.Fills)
-		case pump := <-newpump:
-			fmt.Printf("%s - %d\n", pump.Name, pump.Fills)
+		case pump := <-pumpq:
+			pump.Report()
 		default:
-			fmt.Printf("Waiting...")
-			break PL
+			break pr
 		}
 	}
 
-CL:
+	/* Read all cars from carq chanel and report usage. */
+vr:
 	for {
 		select {
-		case car := <-carchan:
-			fmt.Printf("%s - %d\n", car.Name, car.Fills)
-		case car := <-newcar:
-			fmt.Printf("%s - %d\n", car.Name, car.Fills)
+		case car := <-carq:
+			car.Report()
 		default:
-			break CL
+			break vr
 		}
 	}
-
 }
