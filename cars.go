@@ -91,7 +91,7 @@ func main() {
 	/* Make a pump channel and prime it with new pumps. */
 	pumpq := make(chan Worker, *npumps)
 	for i := 0; i < *npumps; i++ {
-		pumpq <- &Pump{Name: fmt.Sprintf("Pump #%d", i)}
+		pumpq <- &Pump{Name: fmt.Sprintf("pump-%03d", i)}
 	}
 
 	/* Make a car channel and prime it with new cars. */
@@ -103,13 +103,26 @@ func main() {
 		} else {
 			d = *fillrate
 		}
-		carq <- &Car{Name: fmt.Sprintf("Vehicle #%d", i), FillRate: time.Duration(d)}
+		carq <- &Car{Name: fmt.Sprintf("vehicle-%03d", i), FillRate: time.Duration(d)}
 	}
 
 	start := time.Now()
 
 	var wg sync.WaitGroup
 
+	/*
+	 * The algorithm is pretty simple:  We have two channels (pumpq and carq)
+	 * that have a backlog large enough to hold all of our pumps and cars.  We
+	 * use these channels to queue those items.
+	 *
+	 * The program blocks until there is both a car and a pump available on the
+	 * queue.	When there is, they are dequed and their their work methods are run
+	 * concurrently.
+	 *
+	 * In this way, we use channels to send data and syncronize the program.
+	 */
+
+	log.Printf("Statring...")
 	for {
 		/* block until both a pump and a car is ready. */
 		pump := <-pumpq
@@ -118,7 +131,8 @@ func main() {
 		go func() {
 			wg.Add(1)
 			defer wg.Done()
-			log.Printf("Filling %s from %s", car.GetName(), pump.GetName())
+
+			log.Printf("%s filling at %s.", car.GetName(), pump.GetName())
 			pump.DoWork()
 			car.DoWork() /* this will time.Sleep(). */
 
@@ -136,7 +150,7 @@ func main() {
 	/* Wait for all remaining goroutines to finish. */
 	log.Printf("Waiting for remaining go routines to complete...")
 	wg.Wait()
-	log.Printf("Done!")
+	log.Printf("Simulation complete!")
 
 	/* Read all pumps from pumpq chanel and report usage. */
 pr:
