@@ -1,11 +1,20 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"log"
+	"math/rand"
 	"time"
 )
 
+/*
+ * A Worker is an interface that represents either a pump or a car.
+ *
+ * We'll push instances of concrete types the implement Worker into our car and
+ * pump queue.
+ *
+ */
 type Worker interface {
 	DoWork() bool
 	Init(string)
@@ -30,7 +39,7 @@ func (pump Pump) GetName() string {
 
 func (pump *Pump) DoWork() bool {
 	/*
-	 * pumpq really don't do anything.  we just need to have an available pump at
+	 * pumps really don't do anything.  we just need to have an available pump at
 	 * the same time we have a car.
 	 */
 	pump.Pumps++
@@ -56,7 +65,7 @@ func (car *Car) DoWork() bool {
 }
 
 func (car Car) Report() {
-	fmt.Printf("%s filled %d times.\n", car.Name, car.Fills)
+	fmt.Printf("%s filled %d times with a %d fill rate.\n", car.Name, car.Fills, car.FillTime)
 }
 
 func (car Car) GetName() string {
@@ -69,9 +78,13 @@ func (car *Car) Init(name string) {
 }
 
 func main() {
-	npumps := 4
-	ncars := 10
-	runtime := time.Duration(29)
+	npumps := flag.Int("pumps", 4, "Number of pumps.")
+	ncars := flag.Int("cars", 10, "Number of cars.")
+	duration := flag.Int("duration", 30, "Duraton of simulation")
+	filltime := flag.Int("filltime", 50, "Fill time in milliseconds.  0 for random.")
+	flag.Parse()
+
+	runtime := time.Duration(*duration - 1)
 	/* In both loops below, we have to pass pointers to our concrete types (Pump
 	 * and Car).
 	 *
@@ -79,15 +92,21 @@ func main() {
 	 */
 
 	/* Make a pump channel and prime it with new pumps. */
-	pumpq := make(chan Worker, npumps)
-	for i := 0; i < npumps; i++ {
+	pumpq := make(chan Worker, *npumps)
+	for i := 0; i < *npumps; i++ {
 		pumpq <- &Pump{Name: fmt.Sprintf("Pump #%d", i)}
 	}
 
 	/* Make a car channel and prime it with new cars. */
-	carq := make(chan Worker, ncars)
-	for i := 0; i < ncars; i++ {
-		carq <- &Car{Name: fmt.Sprintf("Vehicle #%d", i), FillTime: 50}
+	carq := make(chan Worker, *ncars)
+	for i := 0; i < *ncars; i++ {
+		var d int
+		if *filltime == 0 {
+			d = rand.Intn(3000)
+		} else {
+			d = *filltime
+		}
+		carq <- &Car{Name: fmt.Sprintf("Vehicle #%d", i), FillTime: time.Duration(d)}
 	}
 
 	start := time.Now()
@@ -113,7 +132,7 @@ func main() {
 	}
 
 	/* Wait for all remaining goroutines to finish. */
-	time.Sleep(500 * time.Millisecond)
+	time.Sleep(4000 * time.Millisecond)
 
 	/* Read all pumps from pumpq chanel and report usage. */
 pr:
