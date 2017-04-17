@@ -78,7 +78,7 @@ func main() {
 	npumps := flag.Int("pumps", 4, "Number of pumps.")
 	ncars := flag.Int("cars", 10, "Number of cars.")
 	duration := flag.Int("duration", 30, "Duraton of simulation")
-	fillrate := flag.Int("fillrate", 50, "Fill time in milliseconds.  0 for random.")
+	fillrate := flag.Int("fillrate", 50, "Fill rate in milliseconds/tank.  0 for random.")
 	flag.Parse()
 
 	runtime := time.Duration(*duration - 1)
