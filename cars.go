@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"math/rand"
+	"sync"
 	"time"
 )
 
@@ -110,12 +111,17 @@ func main() {
 	}
 
 	start := time.Now()
+
+	var wg sync.WaitGroup
+
 	for {
 		/* block until both a pump and a car is ready. */
 		pump := <-pumpq
 		car := <-carq
 
 		go func() {
+			wg.Add(1)
+			defer wg.Done()
 			log.Printf("About to fill %s from %s", car.GetName(), pump.GetName())
 			pump.DoWork()
 			car.DoWork() /* this will time.Sleep(). */
@@ -132,7 +138,7 @@ func main() {
 	}
 
 	/* Wait for all remaining goroutines to finish. */
-	time.Sleep(4000 * time.Millisecond)
+	wg.Wait()
 
 	/* Read all pumps from pumpq chanel and report usage. */
 pr:
