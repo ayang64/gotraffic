@@ -123,7 +123,7 @@ func main() {
 	 */
 
 	log.Printf("Statring...")
-	for {
+	for time.Since(start)/time.Second > runtime {
 		/* block until both a pump and a car is ready. */
 		pump := <-pumpq
 		car := <-carq
@@ -140,12 +140,9 @@ func main() {
 			pumpq <- pump
 			carq <- car
 		}()
-
-		if time.Since(start)/time.Second > runtime {
-			log.Printf("Simulated for %s\n", time.Since(start))
-			break
-		}
 	}
+
+	log.Printf("Simulated for %s\n", time.Since(start))
 
 	/* Wait for all remaining goroutines to finish. */
 	log.Printf("Waiting for remaining go routines to complete...")
@@ -153,24 +150,14 @@ func main() {
 	log.Printf("Simulation complete!")
 
 	/* Read all pumps from pumpq chanel and report usage. */
-pr:
-	for {
-		select {
-		case pump := <-pumpq:
-			pump.Report()
-		default:
-			break pr
-		}
+	close(pumpq)
+	for p := range pumpq {
+		p.Report()
 	}
 
 	/* Read all cars from carq chanel and report usage. */
-vr:
-	for {
-		select {
-		case car := <-carq:
-			car.Report()
-		default:
-			break vr
-		}
+	close(carq)
+	for c := range carq {
+		c.Report()
 	}
 }
