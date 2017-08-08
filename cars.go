@@ -18,9 +18,6 @@ import (
  */
 type Worker interface {
 	DoWork() bool
-	Init(string)
-	GetName() string
-	Report()
 }
 
 type Car struct {
@@ -51,10 +48,6 @@ func (pump Pump) Report() {
 	fmt.Printf("%s pumped %d times.\n", pump.Name, pump.Pumps)
 }
 
-func (pump *Pump) Init(name string) {
-	pump.Name = name
-}
-
 func (car *Car) DoWork() bool {
 	time.Sleep(car.FillRate * time.Millisecond)
 	car.Fills++
@@ -68,10 +61,6 @@ func (car Car) Report() {
 func (car Car) GetName() string {
 	return car.Name
 
-}
-
-func (car *Car) Init(name string) {
-	car.Name = name
 }
 
 func main() {
@@ -132,7 +121,7 @@ func main() {
 			wg.Add(1)
 			defer wg.Done()
 
-			log.Printf("%s filling at %s.", car.GetName(), pump.GetName())
+			log.Printf("%s filling at %s.", car.(*Car).GetName(), pump.(*Pump).GetName())
 			pump.DoWork()
 			car.DoWork() /* this will time.Sleep(). */
 
@@ -152,12 +141,12 @@ func main() {
 	/* Read all pumps from pumpq chanel and report usage. */
 	close(pumpq)
 	for p := range pumpq {
-		p.Report()
+		p.(*Pump).Report()
 	}
 
 	/* Read all cars from carq chanel and report usage. */
 	close(carq)
 	for c := range carq {
-		c.Report()
+		c.(*Car).Report()
 	}
 }
